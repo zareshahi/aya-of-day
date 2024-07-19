@@ -94,12 +94,12 @@ Contributions are welcome! To contribute to this project, please follow these st
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0 License. See the [LICENSE](LICENSE) file for details.
 
 ## Contact
 
 For any questions or feedback, please reach out to:
 
-- **Author**: [Your Name](https://github.com/zareshahi)
+- **Author**: [Ali Zare Shahi](https://github.com/zareshahi)
 
 Thank you for checking out the `aya-of-day` project!
