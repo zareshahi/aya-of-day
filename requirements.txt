@@ -1,5 +1,7 @@
 schedule
 pytz
+fastapi 
+uvicorn
 tweepy
 python-dotenv
 text-to-tweets

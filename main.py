@@ -7,10 +7,15 @@ import schedule
 import time
 from typing import NoReturn, Optional, List
 from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, Body, HTTPException
+from fastapi.security import OAuth2PasswordBearer, OAuth2
+from fastapi.responses import JSONResponse
+from fastapi.requests import Request
 from text_to_tweets import tweet_splitter
 
-# Load environment variables
 load_dotenv()
+
+# Load environment variables
 API_KEY = getenv("API_KEY")
 API_SECRET_KEY = getenv("API_SECRET_KEY")
 ACCESS_TOKEN = getenv("ACCESS_TOKEN")
@@ -25,6 +30,10 @@ client = tweepy.Client(
     access_token=ACCESS_TOKEN,
     access_token_secret=ACCESS_TOKEN_SECRET,
 )
+
+app = FastAPI()
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def send_tweet(tweet_content: str, reply_to_id: Optional[str] = None) -> Optional[str]:
     """Send a tweet with optional threading."""
@@ -56,12 +65,12 @@ def get_random_aya() -> List[str]:
             response.append(translation_text)
     return response
 
-def process_and_send_tweets() -> None:
+def process_and_send_tweets() -> JSONResponse:
     """Process the Aya and send tweets in a thread while handling large translations."""
     aya = get_random_aya()
     if not aya:
         print("Error: No Aya data retrieved.")
-        return
+        return JSONResponse(status_code=500, content={"error": "No Aya data retrieved."})
 
     aya_text = aya[0]
     aya_translation = aya[1] if len(aya) > 1 else ""
@@ -84,6 +93,14 @@ def process_and_send_tweets() -> None:
         if tweet_id:
             previous_tweet_id = tweet_id
 
+    return JSONResponse(status_code=200, content={"message": "Tweets sent successfully!"})
+
+@app.post("/tweets")
+async def create_tweet(request: Request, token: str = Depends(oauth2_scheme)):
+    if token!= getenv("TOKEN_SECRET"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return process_and_send_tweets()
+
 def schedule_daily_tweet() -> NoReturn:
     """Schedule the daily tweet."""
     schedule.every().day.at("20:00", tz="Asia/Tehran").do(process_and_send_tweets)
@@ -93,8 +110,5 @@ def schedule_daily_tweet() -> NoReturn:
         time.sleep(60)  # wait one minute
 
 if __name__ == "__main__":
-    # Uncomment to schedule daily tweets
-    schedule_daily_tweet()
-
-    # Uncomment to test sending a tweet
-    # process_and_send_tweets()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=80)
