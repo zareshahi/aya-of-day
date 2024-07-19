@@ -21,6 +21,7 @@ API_SECRET_KEY = getenv("API_SECRET_KEY")
 ACCESS_TOKEN = getenv("ACCESS_TOKEN")
 ACCESS_TOKEN_SECRET = getenv("ACCESS_TOKEN_SECRET")
 BEARER_TOKEN = getenv("BEARER_TOKEN")  # Required for Twitter API v2
+TOKEN_SECRET = getenv("TOKEN_SECRET")
 
 # Authenticate to Twitter API v2
 client = tweepy.Client(
@@ -97,18 +98,24 @@ def process_and_send_tweets() -> JSONResponse:
 
 @app.post("/tweets")
 async def create_tweet(request: Request, token: str = Depends(oauth2_scheme)):
-    if token!= getenv("TOKEN_SECRET"):
+    if token!= TOKEN_SECRET:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return process_and_send_tweets()
 
-def schedule_daily_tweet() -> NoReturn:
-    """Schedule the daily tweet."""
+def run_schedule():
     schedule.every().day.at("20:00", tz="Asia/Tehran").do(process_and_send_tweets)
-
     while True:
         schedule.run_pending()
         time.sleep(60)  # wait one minute
 
 if __name__ == "__main__":
     import uvicorn
+    import threading
+
+    # Run the schedule in a separate thread
+    schedule_thread = threading.Thread(target=run_schedule)
+    schedule_thread.daemon = True  # Set as daemon thread so it exits when main thread exits
+    schedule_thread.start()
+
+    # Run the API
     uvicorn.run(app, host="0.0.0.0", port=80)
