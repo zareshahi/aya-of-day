@@ -1,0 +1,4 @@
+schedule
+tweepy
+python-dotenv
+text-to-tweets
