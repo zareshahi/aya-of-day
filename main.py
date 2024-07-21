@@ -5,6 +5,7 @@ import requests
 import tweepy
 import schedule
 import time
+import asyncio
 from typing import NoReturn, Optional, List
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Body, HTTPException
@@ -23,21 +24,23 @@ ACCESS_TOKEN_SECRET = getenv("ACCESS_TOKEN_SECRET")
 BEARER_TOKEN = getenv("BEARER_TOKEN")  # Required for Twitter API v2
 TOKEN_SECRET = getenv("TOKEN_SECRET")
 
-# Authenticate to Twitter API v2
-client = tweepy.Client(
-    bearer_token=BEARER_TOKEN,
-    consumer_key=API_KEY,
-    consumer_secret=API_SECRET_KEY,
-    access_token=ACCESS_TOKEN,
-    access_token_secret=ACCESS_TOKEN_SECRET,
-)
-
 app = FastAPI()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-def send_tweet(tweet_content: str, reply_to_id: Optional[str] = None) -> Optional[str]:
+def get_twitter_client() -> tweepy.Client:
+    """Create and return a new Tweepy client."""
+    return tweepy.Client(
+        bearer_token=BEARER_TOKEN,
+        consumer_key=API_KEY,
+        consumer_secret=API_SECRET_KEY,
+        access_token=ACCESS_TOKEN,
+        access_token_secret=ACCESS_TOKEN_SECRET,
+    )
+
+async def send_tweet(tweet_content: str, reply_to_id: Optional[str] = None) -> Optional[str]:
     """Send a tweet with optional threading."""
+    client = get_twitter_client()
     try:
         response = client.create_tweet(
             text=tweet_content,
@@ -50,7 +53,7 @@ def send_tweet(tweet_content: str, reply_to_id: Optional[str] = None) -> Optiona
         print(f"Error sending tweet: {error}")
         return None
 
-def get_random_aya() -> List[str]:
+async def get_random_aya() -> List[str]:
     """Fetch a random Aya and its translation."""
     response = []
     aya = random.randint(1, 6237)
@@ -66,9 +69,9 @@ def get_random_aya() -> List[str]:
             response.append(translation_text)
     return response
 
-def process_and_send_tweets() -> JSONResponse:
+async def process_and_send_tweets() -> JSONResponse:
     """Process the Aya and send tweets in a thread while handling large translations."""
-    aya = get_random_aya()
+    aya = await get_random_aya()
     if not aya:
         print("Error: No Aya data retrieved.")
         return JSONResponse(status_code=500, content={"error": "No Aya data retrieved."})
@@ -84,13 +87,13 @@ def process_and_send_tweets() -> JSONResponse:
 
     # Send Aya text in chunks
     for i, part in enumerate(aya_text_parts):
-        tweet_id = send_tweet(part, reply_to_id=previous_tweet_id)
+        tweet_id = await send_tweet(part, reply_to_id=previous_tweet_id)
         if tweet_id:
             previous_tweet_id = tweet_id
 
     # Send translation in chunks
     for i, part in enumerate(translation_parts):
-        tweet_id = send_tweet(part, reply_to_id=previous_tweet_id)
+        tweet_id = await send_tweet(part, reply_to_id=previous_tweet_id)
         if tweet_id:
             previous_tweet_id = tweet_id
 
@@ -98,22 +101,24 @@ def process_and_send_tweets() -> JSONResponse:
 
 @app.post("/tweets")
 async def create_tweet(request: Request, token: str = Depends(oauth2_scheme)):
-    if token!= TOKEN_SECRET:
+    if token != TOKEN_SECRET:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    return process_and_send_tweets()
+    return await process_and_send_tweets()
 
-def run_schedule():
-    schedule.every().day.at("20:00", tz="Asia/Tehran").do(process_and_send_tweets)
+async def run_schedule():
     while True:
         schedule.run_pending()
-        time.sleep(60)  # wait one minute
+        await asyncio.sleep(60)  # wait one minute
 
 if __name__ == "__main__":
     import uvicorn
     import threading
 
+    # Schedule the tweet sending
+    schedule.every().day.at("20:00", tz="Asia/Tehran").do(lambda: asyncio.run(process_and_send_tweets()))
+
     # Run the schedule in a separate thread
-    schedule_thread = threading.Thread(target=run_schedule)
+    schedule_thread = threading.Thread(target=lambda: asyncio.run(run_schedule()))
     schedule_thread.daemon = True  # Set as daemon thread so it exits when main thread exits
     schedule_thread.start()
 
